@@ -18,7 +18,7 @@ on:
 
 env:
   IMAGE_NAME: qui
-  GOARM64_TARGET: v8.2
+  GOARM64_TARGET: v8.2,crypto
 
 concurrency:
   group: build
