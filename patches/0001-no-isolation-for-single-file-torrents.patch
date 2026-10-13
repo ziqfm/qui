@@ -1,0 +1,17 @@
+diff --git a/internal/services/crossseed/service.go b/internal/services/crossseed/service.go
+index 2ccdc11..e3406a8 100644
+--- a/internal/services/crossseed/service.go
++++ b/internal/services/crossseed/service.go
+@@ -14480,6 +14480,12 @@ func (s *Service) buildHardlinkDestDir(
+ 	// Since hardlink mode always uses contentLayout=Original, we only need
+ 	// an isolation folder when the torrent doesn't have a common root folder.
+ 	needsIsolation := !hardlinktree.HasCommonRootFolder(candidateFiles)
++	// Local patch: single-file torrents go straight into the tracker/instance
++	// folder. Collisions still fail safely: hardlinktree.Create refuses to
++	// overwrite a different file at the target path.
++	if len(candidateFiles) == 1 {
++		needsIsolation = false
++	}
+ 
+ 	// Build isolation folder name if needed
+ 	isolationFolder := ""
