@@ -145,7 +145,7 @@ jobs:
           platforms: linux/arm64
           push: true
           build-args: |
-            VERSION=${{ steps.get_tag.outputs.tag }}-patched
+            VERSION=${{ steps.get_tag.outputs.tag }}
             GIT_COMMIT=${{ env.commit }}
             BUILD_DATE=${{ env.build_date }}
           tags: |
