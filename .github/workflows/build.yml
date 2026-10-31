@@ -32,13 +32,13 @@ jobs:
       contents: read
 
     steps:
-      # 1. Patches and tests
+      # 1. Our patches and tests
       - name: Checkout this repository
         uses: actions/checkout@v4
         with:
           path: overlay
 
-      # 2. Latest upstream release
+      # 2. Latest upstream release (or the tag given on a manual run)
       - name: Get latest upstream release tag
         id: get_tag
         env:
@@ -81,11 +81,11 @@ jobs:
             echo "build_needed=true" >> $GITHUB_OUTPUT
           fi
 
-      # 4. History without file contents
+      # 4. Full clone
       - name: Checkout upstream qui
         if: steps.check_build.outputs.build_needed == 'true'
         run: |
-          git clone --filter=blob:none --branch "${{ steps.get_tag.outputs.tag }}" https://github.com/autobrr/qui.git qui
+          git clone --quiet --branch "${{ steps.get_tag.outputs.tag }}" https://github.com/autobrr/qui.git qui
           echo "commit=$(git -C qui rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
 
@@ -101,14 +101,14 @@ jobs:
 
           git -C qui diff HEAD --stat
 
-      # 6. Hot-patch the upstream Dockerfile for the Pi 5
+      # 6. Hot-patch the upstream Dockerfile
       - name: Hot-patch the Dockerfile
         if: steps.check_build.outputs.build_needed == 'true'
         working-directory: qui
         run: |
           F=distrib/docker/Dockerfile
 
-          # Target the Cortex-A76 (ARMv8.2-A): LSE atomics without a runtime check
+          # Target the Cortex-A76 (ARMv8.2-A with crypto extensions)
           sed -i "/^RUN CGO_ENABLED=0 go build/i ENV GOARM64=${GOARM64_TARGET}" "$F"
 
           # Drop build paths from the binary (upstream's release builds do this too)
@@ -125,11 +125,10 @@ jobs:
           go-version-file: qui/go.mod
           cache-dependency-path: qui/go.sum
 
-      # 7. Test the patch still does what it should
       - name: Test the patched behavior
         if: steps.check_build.outputs.build_needed == 'true'
         working-directory: qui
-        run: go test -count=1 ./internal/services/crossseed/ -run 'TestLocalPatch|TestBuildHardlinkDestDir'
+        run: go test -count=1 ./internal/services/crossseed/ -run 'TestLocalPatch|TestLinkDestDir|TestLinkIntoNewFolder'
 
       - name: Set up Docker Buildx
         if: steps.check_build.outputs.build_needed == 'true'
