@@ -1,17 +1,32 @@
 diff --git a/internal/services/crossseed/service.go b/internal/services/crossseed/service.go
-index 2ccdc11..e3406a8 100644
+index dfcb85e1ba118b9689603643f9417a0558276de5..d76e0a7327604ace460d05766a41d10d24efd463 100644
 --- a/internal/services/crossseed/service.go
 +++ b/internal/services/crossseed/service.go
-@@ -14480,6 +14480,12 @@ func (s *Service) buildHardlinkDestDir(
- 	// Since hardlink mode always uses contentLayout=Original, we only need
- 	// an isolation folder when the torrent doesn't have a common root folder.
- 	needsIsolation := !hardlinktree.HasCommonRootFolder(candidateFiles)
-+	// Local patch: single-file torrents go straight into the tracker/instance
-+	// folder. Collisions still fail safely: hardlinktree.Create refuses to
-+	// overwrite a different file at the target path.
-+	if len(candidateFiles) == 1 {
-+		needsIsolation = false
+@@ -12247,6 +12247,11 @@ func (s *Service) linkPresetDir(
+ // folder brings its own top folder. A rootless torrent gets an isolation
+ // folder named after the torrent, and the tree goes into it.
+ func linkDestDir(d fsops.PathDialect, presetDir, torrentName string, files []hardlinktree.TorrentFile) (topFolder, destDir string) {
++	// Local patch: a single bare file goes straight into presetDir, with no
++	// isolation folder. LinkIntoNewFolder isolates it only when the name is taken.
++	if len(files) == 1 && !hardlinktree.HasCommonRootFolder(files) {
++		return "", presetDir
 +	}
- 
- 	// Build isolation folder name if needed
- 	isolationFolder := ""
+ 	if hardlinktree.HasCommonRootFolder(files) {
+ 		root, _, _ := strings.Cut(files[0].Path, "/")
+ 		return d.Join(presetDir, root), presetDir
+@@ -12274,6 +12279,15 @@ func LinkIntoNewFolder(
+ 	if err := backend.MkdirAll(ctx, presetDir, fsutil.ContentDirMode); err != nil {
+ 		return nil, fmt.Errorf("create link directory %s: %w", presetDir, err)
+ 	}
++	if topFolder == "" {
++		// Local patch: link the single file into presetDir when its name is free.
++		// When it is taken, isolate it the way upstream does any rootless torrent.
++		if _, err := backend.Lstat(ctx, d.Join(presetDir, d.FromSlash(files[0].Path))); errors.Is(err, fs.ErrNotExist) {
++			return link(destDir)
++		}
++		topFolder = d.Join(presetDir, pathutil.IsolationFolder(torrentName))
++		destDir = topFolder
++	}
+ 	if err := backend.Mkdir(ctx, topFolder, fsutil.ContentDirMode); err != nil {
+ 		if !errors.Is(err, fs.ErrExist) {
+ 			return nil, fmt.Errorf("create link folder %s: %w", topFolder, err)
